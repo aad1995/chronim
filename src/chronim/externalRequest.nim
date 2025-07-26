@@ -1,10 +1,10 @@
-import asyncdispatch, net, httpclient, times, strutils, nativesockets, json, uri
+import std/[asyncdispatch, net, httpclient, times, strutils, nativesockets, json, uri]
 
 const
   REQUEST_TIMEOUT = 10000 # ms
 
 type
-  Options = object
+  Options* = object
     host: string
     port: int
     path: string

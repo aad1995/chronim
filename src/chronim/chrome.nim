@@ -1,5 +1,4 @@
 import std/[asyncdispatch, json, tables, strutils, websocket, uri, os, sequtils]
-
 import api, devtools
 
 const
@@ -30,16 +29,14 @@ type
     webSocketUrl: string
     _ws: AsyncWebSocket
 
-# ProtocolError constructor
 proc newProtocolError(request, response: JsonNode): ref ProtocolError =
-  var msg = response["message"].getStr()
+  var msg = if response.hasKey("message"): response["message"].getStr() else: "Protocol Error"
   if response.hasKey("data"):
     msg &= " (" & response["data"].getStr() & ")"
-  result = (ref ProtocolError)(msg)
+  result = ProtocolError.newException(msg)
   result.request = request
   result.response = response
 
-# Default target selection logic
 proc defaultTarget(targets: seq[JsonNode]): JsonNode =
   var backup: JsonNode
   for target in targets:
@@ -52,20 +49,21 @@ proc defaultTarget(targets: seq[JsonNode]): JsonNode =
     return backup
   raise newException(ValueError, "No inspectable targets")
 
-# Chrome constructor
 proc newChrome*(options: JsonNode, notifier: ChromeNotifier): Chrome =
   let opts = if options.isNil: %*{} else: options
   let userTarget =
     if opts.hasKey("target"):
       opts["target"]
     else:
-      %*defaultTarget # store as a function
+      %*defaultTarget # store as a function; would normally wrap proc NOT JsonNode (see note)
   result = Chrome(
     host: if opts.hasKey("host"): opts["host"].getStr() else: DefaultHost,
     port: if opts.hasKey("port"): opts["port"].getInt() else: DefaultPort,
     secure: if opts.hasKey("secure"): opts["secure"].getBool() else: false,
     useHostName: if opts.hasKey("useHostName"): opts["useHostName"].getBool() else: false,
-    alterPath: if opts.hasKey("alterPath"): cast[proc(path: string): string](opts["alterPath"].getProc()) else: (proc(path: string): string = path),
+    alterPath: (if opts.hasKey("alterPath") and opts["alterPath"].kind == JProc: 
+                  cast[proc(path: string): string](opts["alterPath"].getProc())
+                else: proc(path: string): string = path),
     protocol: if opts.hasKey("protocol"): opts["protocol"] else: nil,
     local: if opts.hasKey("local"): opts["local"].getBool() else: false,
     target: userTarget,
@@ -77,7 +75,6 @@ proc newChrome*(options: JsonNode, notifier: ChromeNotifier): Chrome =
   )
   asyncSpawn result._start()
 
-# send method (promise or callback)
 proc send(self: Chrome, method: string, params: JsonNode = nil, sessionId: string = "", callback: CallbackProc = nil): Future[JsonNode] {.async.} =
   var cb = callback
   if cb == nil:
@@ -94,10 +91,9 @@ proc send(self: Chrome, method: string, params: JsonNode = nil, sessionId: strin
     self._enqueueCommand(method, params, sessionId, cb)
     return nil
 
-# close method (promise or callback)
 proc close(self: Chrome, callback: proc() = nil): Future[void] {.async.} =
   proc closeWebSocket(cb: proc()) =
-    if self._ws.readyState == Closed:
+    if self._ws == nil or self._ws.readyState == Closed:
       cb()
     else:
       self._ws.onClose = proc() =
@@ -112,15 +108,15 @@ proc close(self: Chrome, callback: proc() = nil): Future[void] {.async.} =
     closeWebSocket(proc() = fut.complete())
     await fut
 
-# _start: connection process
 proc _start(self: Chrome) {.async.} =
   var options = %*{
     "host": self.host,
     "port": self.port,
     "secure": self.secure,
-    "useHostName": self.useHostName,
-    "alterPath": %*self.alterPath
+    "useHostName": self.useHostName
   }
+  if not isNil(self.alterPath):
+    options["alterPath"] = %*self.alterPath
   try:
     let url = await self._fetchDebuggerURL(options)
     var urlObj = parseUri(url)
@@ -132,12 +128,10 @@ proc _start(self: Chrome) {.async.} =
     let protocol = await self._fetchProtocol(options)
     api.prepare(self, protocol)
     await self._connectToWebSocket()
-    # nextTick
     asyncSpawn self._notifier.emit("connect", self)
   except CatchableError as err:
     self._notifier.emit("error", %*err.msg)
 
-# _fetchDebuggerURL
 proc _fetchDebuggerURL(self: Chrome, options: JsonNode): Future[string] {.async.} =
   let userTarget = self.target
   if userTarget.kind == JString:
@@ -149,7 +143,7 @@ proc _fetchDebuggerURL(self: Chrome, options: JsonNode): Future[string] {.async.
     else:
       let targets = await devtools.List(options)
       for target in targets.getElems():
-        if target["id"].getStr() == idOrUrl:
+        if target.hasKey("id") and target["id"].getStr() == idOrUrl:
           return target["webSocketDebuggerUrl"].getStr()
       raise newException(ValueError, "Target not found")
   elif userTarget.kind == JObject:
@@ -159,16 +153,21 @@ proc _fetchDebuggerURL(self: Chrome, options: JsonNode): Future[string] {.async.
     let targets = await devtools.List(options)
     let result = func(targets.getElems())
     if result.kind == JInt:
-      return targets.getElems()[result.getInt()]["webSocketDebuggerUrl"].getStr()
-    else:
+      let elems = targets.getElems()
+      if result.getInt() in 0 ..< elems.len:
+        return elems[result.getInt()]["webSocketDebuggerUrl"].getStr()
+      else:
+        raise newException(ValueError, "Target index out of range")
+    elif result.kind == JObject and result.hasKey("webSocketDebuggerUrl"):
       return result["webSocketDebuggerUrl"].getStr()
+    else:
+      raise newException(ValueError, "Function did not return a valid target")
   else:
     # If target is not set, use defaultTarget
     let targets = await devtools.List(options)
     let object = defaultTarget(targets.getElems())
     return object["webSocketDebuggerUrl"].getStr()
 
-# _fetchProtocol
 proc _fetchProtocol(self: Chrome, options: JsonNode): Future[JsonNode] {.async.} =
   if not self.protocol.isNil:
     return self.protocol
@@ -176,7 +175,6 @@ proc _fetchProtocol(self: Chrome, options: JsonNode): Future[JsonNode] {.async.}
     options["local"] = %*self.local
     return await devtools.Protocol(options)
 
-# _connectToWebSocket
 proc _connectToWebSocket(self: Chrome): Future[void] {.async.} =
   try:
     var wsUrl = self.webSocketUrl
@@ -194,14 +192,12 @@ proc _connectToWebSocket(self: Chrome): Future[void] {.async.} =
   except CatchableError as err:
     raise err
 
-# _handleConnectionClose
 proc _handleConnectionClose(self: Chrome) =
   let err = newException(IOError, "WebSocket connection closed")
   for id, cb in self._callbacks:
     cb(true, %*{"message": err.msg})
   self._callbacks.clear()
 
-# _handleMessage
 proc _handleMessage(self: Chrome, message: JsonNode) =
   if message.hasKey("id"):
     let id = message["id"].getInt()
@@ -222,7 +218,6 @@ proc _handleMessage(self: Chrome, message: JsonNode) =
     self._notifier.emit(method, params, %*sessionId)
     self._notifier.emit(method & "." & sessionId, params, %*sessionId)
 
-# _enqueueCommand
 proc _enqueueCommand(self: Chrome, method: string, params: JsonNode, sessionId: string, callback: CallbackProc) =
   let id = self._nextCommandId
   self._nextCommandId.inc()
@@ -234,4 +229,3 @@ proc _enqueueCommand(self: Chrome, method: string, params: JsonNode, sessionId: 
   }
   self._ws.send($message)
   self._callbacks[id] = callback
-
