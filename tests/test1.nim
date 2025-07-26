@@ -1,6 +1,5 @@
 import std/[unittest, asyncdispatch, json]
-import chronim  # Or chronim/cdp, depending on your package
-# Assumes you have a CDP and a way to get the Chrome object
+import chronim 
 
 suite "CDPTests":
   asyncTest "navigate to google.com":
@@ -8,7 +7,6 @@ suite "CDPTests":
     let emitter = await CDP(options)
     var pageLoaded = false
 
-    # Optional: Get the Chrome instance if your CDP API supports it
     let chromeObj = getChromeInstance(emitter) # Implement this or extract it from emitter
 
     discard await chromeObj.send("Page.enable")
