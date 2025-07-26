@@ -72,7 +72,7 @@ proc addType(chrome: var ChromeType, domainName: string, typ: Table[string, Json
     chrome[domainName] = %initTable[string, JsonNode]()
   chrome[domainName][typ["id"].getStr()] = %help
 
-proc prepare(object: var ChromeType, protocol: ProtocolType) =
+proc prepare*(object: var ChromeType, protocol: ProtocolType) =
   object["protocol"] = %protocol
   for domain in protocol.domains:
     let domainName = domain["domain"].getStr()

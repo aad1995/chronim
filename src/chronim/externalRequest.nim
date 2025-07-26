@@ -20,7 +20,7 @@ proc dnsLookup(host: string): Future[string] {.async.} =
     raise newException(IOError, "DNS lookup failed for " & host)
   return $addrInfo[0].address
 
-proc externalRequest(
+proc externalRequest*(
     transport: AsyncHttpClient,
     options: var Options,
     callback: proc(err: ref Exception, data: string)

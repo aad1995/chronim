@@ -1,4 +1,5 @@
-import std/[asyncdispatch, httpclient, json, strutils, tables, uri] , externalRequest
+import std/[asyncdispatch, httpclient, json, strutils, tables, uri]
+from externalRequest import externalRequest
 
 const
   DefaultHost = "localhost"
@@ -60,7 +61,7 @@ proc promisesWrapper(
       )
       return await fut
 
-proc Protocol(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc Protocol*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   if options.local:
     let localDescriptor = readFile("protocol.json")
     callback(nil, localDescriptor)
@@ -72,7 +73,7 @@ proc Protocol(options: DevToolsOptions, callback: proc(err: ref Exception, data:
       callback(nil, descriptor)
   )
 
-proc List(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc List*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   await devToolsInterface("/json/list", options, proc(err: ref Exception, tabs: string) =
     if err != nil:
       callback(err, "")
@@ -80,7 +81,7 @@ proc List(options: DevToolsOptions, callback: proc(err: ref Exception, data: str
       callback(nil, tabs)
   )
 
-proc New(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc New*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   var path = "/json/new"
   if options.url.len > 0:
     path &= "?" & encodeUrl(options.url)
@@ -94,7 +95,7 @@ proc New(options: DevToolsOptions, callback: proc(err: ref Exception, data: stri
       callback(nil, tab)
   )
 
-proc Activate(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc Activate*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   let path = "/json/activate/" & options.id
   await devToolsInterface(path, options, proc(err: ref Exception, _: string) =
     if err != nil:
@@ -103,7 +104,7 @@ proc Activate(options: DevToolsOptions, callback: proc(err: ref Exception, data:
       callback(nil, "")
   )
 
-proc Close(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc Close*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   let path = "/json/close/" & options.id
   await devToolsInterface(path, options, proc(err: ref Exception, _: string) =
     if err != nil:
@@ -112,7 +113,7 @@ proc Close(options: DevToolsOptions, callback: proc(err: ref Exception, data: st
       callback(nil, "")
   )
 
-proc Version(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
+proc Version*(options: DevToolsOptions, callback: proc(err: ref Exception, data: string)) {.async.} =
   await devToolsInterface("/json/version", options, proc(err: ref Exception, versionInfo: string) =
     if err != nil:
       callback(err, "")
@@ -120,12 +121,15 @@ proc Version(options: DevToolsOptions, callback: proc(err: ref Exception, data: 
       callback(nil, versionInfo)
   )
 
-let ProtocolPromise = promisesWrapper(Protocol)
-let ListPromise = promisesWrapper(List)
-let NewPromise = promisesWrapper(New)
-let ActivatePromise = promisesWrapper(Activate)
-let ClosePromise = promisesWrapper(Close)
-let VersionPromise = promisesWrapper(Version)
+
+let
+  ProtocolPromise* = promisesWrapper(Protocol)
+  ListPromise* = promisesWrapper(List)
+  NewPromise* = promisesWrapper(New)
+  ActivatePromise* = promisesWrapper(Activate)
+  ClosePromise* = promisesWrapper(Close)
+  VersionPromise* = promisesWrapper(Version)
+
 
 # Usage example:
 # let fut = await ProtocolPromise(DevToolsOptions(host: "localhost", port: 9222), nil)
