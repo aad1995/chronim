@@ -10,3 +10,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.0.0"
+
+# Test command:
+
+testScript = "tests/test_google.nim"

@@ -9,7 +9,7 @@ type
   DevToolsOptions* = object
     host*: string
     port*: int
-    method*: string
+    hmethod*: string
     useHostName*: bool
     secure*: bool
     local*: bool
@@ -28,7 +28,7 @@ proc devToolsInterface*(
   let scheme = if options.secure: "https" else: "http"
   let host = if options.host.len > 0: options.host else: DefaultHost
   let port = if options.port > 0: options.port else: DefaultPort
-  let method = if options.method.len > 0: options.method else: "GET"
+  let hmethod = if options.hmethod.len > 0: options.hmethod else: "GET"
   let useHostName = options.useHostName
   var finalPath = path
   if not isNil(options.alterPath):
@@ -38,7 +38,7 @@ proc devToolsInterface*(
     host: host,
     port: port,
     path: finalPath,
-    method: method,
+    hmethod: hmethod,
     headers: initTable[string, string](),
     body: "",
     useHostName: useHostName,
@@ -87,8 +87,8 @@ proc New*(
   if options.url.len > 0:
     path &= "?" & encodeUrl(options.url)
   var opts = options
-  if opts.method.len == 0:
-    opts.method = "PUT"
+  if opts.hmethod.len == 0:
+    opts.hmethod = "PUT"
   await devToolsInterface(path, opts, callback)
 
 proc Activate*(

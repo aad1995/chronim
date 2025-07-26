@@ -75,20 +75,20 @@ proc newChrome*(options: JsonNode, notifier: ChromeNotifier): Chrome =
   )
   asyncSpawn result._start()
 
-proc send(self: Chrome, method: string, params: JsonNode = nil, sessionId: string = "", callback: CallbackProc = nil): Future[JsonNode] {.async.} =
+proc send(self: Chrome, hmethod: string, params: JsonNode = nil, sessionId: string = "", callback: CallbackProc = nil): Future[JsonNode] {.async.} =
   var cb = callback
   if cb == nil:
     var fut = newFuture[JsonNode]()
     cb = proc(error: bool, response: JsonNode) =
       if error:
-        let req = %*{"method": method, "params": params, "sessionId": sessionId}
+        let req = %*{"method": hmethod, "params": params, "sessionId": sessionId}
         fut.fail(newProtocolError(req, response))
       else:
         fut.complete(response)
-    self._enqueueCommand(method, params, sessionId, cb)
+    self._enqueueCommand(hmethod, params, sessionId, cb)
     return await fut
   else:
-    self._enqueueCommand(method, params, sessionId, cb)
+    self._enqueueCommand(hmethod, params, sessionId, cb)
     return nil
 
 proc close(self: Chrome, callback: proc() = nil): Future[void] {.async.} =
@@ -200,20 +200,20 @@ proc _handleMessage(self: Chrome, message: JsonNode) =
       if self._callbacks.len == 0:
         self._notifier.emit("ready", %*{}, "")
   elif message.hasKey("method"):
-    let method = message["method"].getStr()
+    let hmethod = message["method"].getStr()
     let params = if message.hasKey("params"): message["params"] else: %*{}
     let sessionId = if message.hasKey("sessionId"): message["sessionId"].getStr() else: ""
     self._notifier.emit("event", message, "")
-    self._notifier.emit(method, params, sessionId)
+    self._notifier.emit(hmethod, params, sessionId)
     if sessionId.len > 0:
-      self._notifier.emit(method & "." & sessionId, params, sessionId)
+      self._notifier.emit(hmethod & "." & sessionId, params, sessionId)
 
-proc _enqueueCommand(self: Chrome, method: string, params: JsonNode, sessionId: string, callback: CallbackProc) =
+proc _enqueueCommand(self: Chrome, hmethod: string, params: JsonNode, sessionId: string, callback: CallbackProc) =
   let id = self._nextCommandId
   self._nextCommandId.inc()
   let message = %*{
     "id": id,
-    "method": method,
+    "method": hmethod,
     "sessionId": sessionId,
     "params": if params.isNil: %*{} else: params
   }

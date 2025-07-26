@@ -8,7 +8,7 @@ type
     host*: string
     port*: int
     path*: string
-    method*: string
+    hmethod*: string
     headers*: Table[string, string]
     body*: string
     useHostName*: bool
@@ -44,7 +44,7 @@ proc externalRequest*(
 
   try:
     var resp: AsyncResponse
-    case options.method.toUpperAscii()
+    case options.hmethod.toUpperAscii()
     of "POST":
       resp = await transport.request(url, httpMethod = HttpPost, headers = reqHeaders, body = options.body, timeout = REQUEST_TIMEOUT)
     of "PUT":
