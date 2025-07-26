@@ -1,18 +1,18 @@
-import std/[asyncdispatch, net, httpclient, times, strutils, nativesockets, json, uri]
+import std/[asyncdispatch, net, httpclient, times, strutils, nativesockets, json, uri, tables]
 
 const
   REQUEST_TIMEOUT = 10000 # ms
 
 type
   Options* = object
-    host: string
-    port: int
-    path: string
-    method: string
-    headers: Table[string, string]
-    body: string
-    useHostName: bool
-    scheme: string
+    host*: string
+    port*: int
+    path*: string
+    method*: string
+    headers*: Table[string, string]
+    body*: string
+    useHostName*: bool
+    scheme*: string
 
 proc dnsLookup(host: string): Future[string] {.async.} =
   let addrInfo = getAddrInfo(host, Port(0))
@@ -22,15 +22,14 @@ proc dnsLookup(host: string): Future[string] {.async.} =
 
 proc externalRequest*(
     transport: AsyncHttpClient,
-    options: var Options,
-    callback: proc(err: ref Exception, data: string)
+    options: Options,
+    callback: proc(err: ref Exception, data: string) {.gcsafe.}
 ) {.async.} =
   var reqHost = options.host
   if not options.useHostName:
     try:
-      let address = await dnsLookup(options.host)
-      reqHost = address
-    except Exception as err:
+      reqHost = await dnsLookup(options.host)
+    except CatchableError as err:
       callback(err, "")
       return
 
@@ -56,9 +55,9 @@ proc externalRequest*(
       resp = await transport.request(url, httpMethod = HttpGet, headers = reqHeaders, timeout = REQUEST_TIMEOUT)
 
     let data = await resp.body
-    if resp.code == Http200:
+    if resp.code in {Http200, Http201, Http204}:
       callback(nil, data)
     else:
-      callback(newException(IOError, data), "")
-  except Exception as err:
+      callback(newException(IOError, "HTTP " & $resp.code & ": " & data), "")
+  except CatchableError as err:
     callback(err, "")
