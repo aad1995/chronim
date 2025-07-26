@@ -10,6 +10,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 2.0.0"
+requires "ws >= 0.5.0"
 
 # Test command:
 

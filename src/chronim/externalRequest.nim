@@ -1,7 +1,5 @@
-import std/[asyncdispatch, net, httpclient, times, strutils, nativesockets, json, uri, tables]
+import std/[asyncdispatch, net, httpclient, strutils, nativesockets, uri, tables, strformat]
 
-const
-  REQUEST_TIMEOUT = 10000 # ms
 
 type
   Options* = object
@@ -14,11 +12,14 @@ type
     useHostName*: bool
     scheme*: string
 
-proc dnsLookup(host: string): Future[string] {.async.} =
+proc dnsLookup(host: string): string =
   let addrInfo = getAddrInfo(host, Port(0))
-  if addrInfo.len == 0:
+  if addrInfo == nil:
     raise newException(IOError, "DNS lookup failed for " & host)
-  return $addrInfo[0].address
+  let addressStr = $addrInfo.ai_addr[]
+  freeAddrInfo(addrInfo)
+  return addressStr
+
 
 proc externalRequest*(
     transport: AsyncHttpClient,
@@ -28,7 +29,7 @@ proc externalRequest*(
   var reqHost = options.host
   if not options.useHostName:
     try:
-      reqHost = await dnsLookup(options.host)
+      reqHost = dnsLookup(options.host)
     except CatchableError as err:
       callback(err, "")
       return
@@ -46,13 +47,13 @@ proc externalRequest*(
     var resp: AsyncResponse
     case options.hmethod.toUpperAscii()
     of "POST":
-      resp = await transport.request(url, httpMethod = HttpPost, headers = reqHeaders, body = options.body, timeout = REQUEST_TIMEOUT)
+      resp = await transport.request(url, httpMethod = HttpPost, headers = reqHeaders, body = options.body)
     of "PUT":
-      resp = await transport.request(url, httpMethod = HttpPut, headers = reqHeaders, body = options.body, timeout = REQUEST_TIMEOUT)
+      resp = await transport.request(url, httpMethod = HttpPut, headers = reqHeaders, body = options.body)
     of "DELETE":
-      resp = await transport.request(url, httpMethod = HttpDelete, headers = reqHeaders, body = options.body, timeout = REQUEST_TIMEOUT)
+      resp = await transport.request(url, httpMethod = HttpDelete, headers = reqHeaders, body = options.body)
     else:
-      resp = await transport.request(url, httpMethod = HttpGet, headers = reqHeaders, timeout = REQUEST_TIMEOUT)
+      resp = await transport.request(url, httpMethod = HttpGet, headers = reqHeaders)
 
     let data = await resp.body
     if resp.code in {Http200, Http201, Http204}:

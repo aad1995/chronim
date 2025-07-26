@@ -1,4 +1,4 @@
-import std/[asyncdispatch, httpclient, json, tables, uri, os]
+import std/[asyncdispatch, httpclient, tables, uri]
 import externalRequest
 
 const
@@ -50,11 +50,10 @@ proc devToolsInterface*(
 
 # Promises wrapper
 proc promisesWrapper*(
-  func: proc(options: DevToolsOptions, callback: proc(err: ref Exception, data: string) {.gcsafe.}) {.async.}
-): proc(options: DevToolsOptions): Future[string] =
+  mfunc: proc(options: DevToolsOptions, callback: proc(err: ref Exception, data: string) {.gcsafe, closure.}) {.async.}): proc(options: DevToolsOptions): Future[string] =
   return proc(options: DevToolsOptions): Future[string] {.async.} =
     var fut = newFuture[string]()
-    await func(options, proc(err: ref Exception, data: string) {.gcsafe.} =
+    await mfunc(options, proc(err: ref Exception, data: string) {.gcsafe.} =
       if err != nil:
         fut.fail(err)
       else:
