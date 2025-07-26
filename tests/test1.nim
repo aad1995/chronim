@@ -1,12 +1,37 @@
-# This is just an example to get you started. You may wish to put all of your
-# tests into a single file, or separate them into multiple `test1`, `test2`
-# etc. files (better names are recommended, just make sure the name starts with
-# the letter 't').
-#
-# To run these tests, simply execute `nimble test`.
+import std/[unittest, asyncdispatch, json]
+import chronim  # Or chronim/cdp, depending on your package
+# Assumes you have a CDP and a way to get the Chrome object
 
-import unittest
+suite "CDPTests":
+  asyncTest "navigate to google.com":
+    let options = %*{"host": "localhost", "port": 9222}
+    let emitter = await CDP(options)
+    var pageLoaded = false
 
-import chronim
-test "can add":
-  check add(5, 5) == 10
+    # Optional: Get the Chrome instance if your CDP API supports it
+    let chromeObj = getChromeInstance(emitter) # Implement this or extract it from emitter
+
+    discard await chromeObj.send("Page.enable")
+    emitter.on("Page.loadEventFired", proc(params: JsonNode, sessionId: string) =
+      echo "Page loaded: ", params.pretty
+      pageLoaded = true
+    )
+
+    discard await chromeObj.send("Page.navigate", %*{"url": "https://www.google.com"})
+
+    # Wait for the event or timeout
+    var tries = 0
+    while not pageLoaded and tries < 100:
+      await sleepAsync(100)
+      inc tries
+
+    check pageLoaded
+#[
+Make sure Chrome is running:
+chrome --remote-debugging-port=9222
+
+Run your test with Nim:
+nimble test
+or
+nim c -r tests/test_google.nim
+]#
