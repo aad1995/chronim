@@ -13,7 +13,6 @@ proc CDP*(
   if callback != nil:
     notifier.once("connect", callback)
     asyncCheck (proc() {.async.} =
-      await sleepAsync(0)
       discard newChrome(options, notifier)
     )()
     return notifier
@@ -31,3 +30,6 @@ proc CDP*(
     )
     discard newChrome(options, notifier)
     return await fut
+
+let options = %*{"host": "localhost", "port": 9222}
+let emitter = waitFor CDP(options)
