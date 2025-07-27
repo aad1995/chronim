@@ -1,12 +1,12 @@
 import std/[json, tables, strformat]
 
 type
-  ChromeType* = ref object
+  CallbackProc = proc(error: bool, response: JsonNode)
+  ChromeNotifier* = ref object of RootObj
+    emit: proc(event: string, params: JsonNode, sessionId: string = "")
+  ChromeType* = ref object of RootObj
     protocol*: JsonNode
-    domains*: Table[string, JsonNode]
-
-  ProtocolType* = ref object
-    domains*: seq[Table[string, JsonNode]]
+    domains*: JsonNode
 
 # Converts array of parameter objects to table keyed by "name"
 proc arrayToObject(parameters: seq[OrderedTable[string, JsonNode]]): Table[string, OrderedTable[string, JsonNode]] =
@@ -18,7 +18,6 @@ proc arrayToObject(parameters: seq[OrderedTable[string, JsonNode]]): Table[strin
       paramCopy.del("name")
       keyValue[name] = paramCopy
   return keyValue
-
 
 # Decorate result dictionary with fields of protocol JSON element
 proc decorate(to: var Table[string, JsonNode], category: string, obj: Table[string, JsonNode]) =
@@ -35,58 +34,60 @@ proc decorate(to: var Table[string, JsonNode], category: string, obj: Table[stri
     else:
       to[field] = obj[field]
 
-proc addCommand(chrome: ChromeType, domainName: string, command: Table[string, JsonNode]) =
+proc addCommand(domains: var JsonNode, domainName: string, command: Table[string, JsonNode]) =
   let coStr = command["name"].getStr()
   let commandName = fmt"{domainName}.{coStr}"
   var commandObj = initTable[string, JsonNode]()
   decorate(commandObj, "command", command)
-  chrome.domains[commandName] = %commandObj
-  # Add per-domain command map
-  if not chrome.domains.hasKey(domainName):
-    chrome.domains[domainName] = %initTable[string, JsonNode]()
-  chrome.domains[domainName][command["name"].getStr()] = %commandObj
+  # Top-level flat entry
+  domains[commandName] = %commandObj
+  # Nested per-domain map
+  if not domains.hasKey(domainName):
+    domains[domainName] = %newJObject()
+  domains[domainName][coStr] = %commandObj
 
-proc addEvent(chrome: ChromeType, domainName: string, event: Table[string, JsonNode]) =
+proc addEvent(domains: var JsonNode, domainName: string, event: Table[string, JsonNode]) =
   let evStr = event["name"].getStr()
   let eventName = fmt"{domainName}.{evStr}"
   var eventObj = initTable[string, JsonNode]()
   decorate(eventObj, "event", event)
-  chrome.domains[eventName] = %eventObj
-  if not chrome.domains.hasKey(domainName):
-    chrome.domains[domainName] = %initTable[string, JsonNode]()
-  chrome.domains[domainName][event["name"].getStr()] = %eventObj
+  domains[eventName] = %eventObj
+  if not domains.hasKey(domainName):
+    domains[domainName] = %newJObject()
+  domains[domainName][evStr] = %eventObj
 
-proc addType(chrome: ChromeType, domainName: string, typ: Table[string, JsonNode]) =
+proc addType(domains: var JsonNode, domainName: string, typ: Table[string, JsonNode]) =
   let typStr = typ["id"].getStr()
   let typeName = fmt"{domainName}.{typStr}"
   var typeObj = initTable[string, JsonNode]()
   decorate(typeObj, "type", typ)
-  chrome.domains[typeName] = %typeObj
-  if not chrome.domains.hasKey(domainName):
-    chrome.domains[domainName] = %initTable[string, JsonNode]()
-  chrome.domains[domainName][typ["id"].getStr()] = %typeObj
+  domains[typeName] = %typeObj
+  if not domains.hasKey(domainName):
+    domains[domainName] = %newJObject()
+  domains[domainName][typStr] = %typeObj
 
 # Main protocol pre processor.
-proc prepare*(chrome: ChromeType, protocol: ProtocolType) =
-  chrome.protocol = %protocol
-  for domain in protocol.domains:
+proc prepare*(chrome: ChromeType, protocol: JsonNode) =
+  chrome.protocol = protocol
+  chrome.domains = %newJObject()
+  for domain in protocol["domains"]:
     let domainName = domain["domain"].getStr()
-    chrome.domains[domainName] = %initTable[string, JsonNode]()
-    for command in domain.getOrDefault("commands", %[]).getElems():
-      let fields = command.getFields()
-      var tableFields = initTable[string, JsonNode]()
-      for k, v in fields:
-        tableFields[k] = v
-      addCommand(chrome, domainName, tableFields)
-    for event in domain.getOrDefault("events", %[]).getElems():
-      let fields = event.getFields()
-      var tableFields = initTable[string, JsonNode]()
-      for k, v in fields:
-        tableFields[k] = v
-      addEvent(chrome, domainName, tableFields)
-    for typ in domain.getOrDefault("types", %[]).getElems():
-      let fields = typ.getFields()
-      var tableFields = initTable[string, JsonNode]()
-      for k, v in fields:
-        tableFields[k] = v
-      addType(chrome, domainName, tableFields)
+    chrome.domains[domainName] = %newJObject()
+    if domain.hasKey("commands"):
+      for command in domain["commands"]:
+        let fields = command.getFields()
+        var tableFields = initTable[string, JsonNode]()
+        for k, v in fields: tableFields[k] = v
+        addCommand(chrome.domains, domainName, tableFields)
+    if domain.hasKey("events"):
+      for event in domain["events"]:
+        let fields = event.getFields()
+        var tableFields = initTable[string, JsonNode]()
+        for k, v in fields: tableFields[k] = v
+        addEvent(chrome.domains, domainName, tableFields)
+    if domain.hasKey("types"):
+      for typ in domain["types"]:
+        let fields = typ.getFields()
+        var tableFields = initTable[string, JsonNode]()
+        for k, v in fields: tableFields[k] = v
+        addType(chrome.domains, domainName, tableFields)

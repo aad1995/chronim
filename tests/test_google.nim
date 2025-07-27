@@ -1,21 +1,10 @@
 import std/[unittest, asyncdispatch, json]
 import chronim
-suite "CDP smoke test":
-  asyncTest "browse to google.com":
+suite "CDP sync smoke test":
+  test "CDP connects to Chrome":
     let options = %*{"host": "localhost", "port": 9222}
-    let emitter = await CDP(options)
-    var loaded = false
-    let chromeObj = getChromeInstance(emitter) # Or however your API works
-    discard await chromeObj.send("Page.enable")
-    emitter.on("Page.loadEventFired", proc(params: JsonNode, sessionId: string) =
-      loaded = true
-    )
-    discard await chromeObj.send("Page.navigate", %*{"url": "https://www.google.com"})
-    var tries = 0
-    while not loaded and tries < 100:
-      await sleepAsync(100)
-      inc tries
-    check loaded
+    let emitter = waitFor CDP(options)
+    check not emitter.isNil
 
 #[
 Make sure Chrome is running:

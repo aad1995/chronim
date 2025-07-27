@@ -2,7 +2,7 @@ import std/[tables, sequtils, json]
 
 type
   EventHandler* = proc(params: JsonNode, sessionId: string)
-  EventEmitter* = ref object
+  EventEmitter* = ref object of RootObj
     handlers: Table[string, seq[EventHandler]]
 
 proc newEventEmitter*(): EventEmitter =

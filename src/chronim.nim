@@ -1,5 +1,5 @@
-import std/[asyncdispatch, os, json]
-import chronim/[devtools, chrome, eventemitter]
+import std/[asyncdispatch, json]
+import chronim/[chrome, eventemitter]
 
 when defined(linux) or defined(macosx):
   setEnv("RES_OPTIONS", "inet6=off")
@@ -12,9 +12,9 @@ proc CDP*(
   let notifier = newEventEmitter()
   if callback != nil:
     notifier.once("connect", callback)
-    asyncSpawn (proc() {.async.} =
+    asyncCheck (proc() {.async.} =
       await sleepAsync(0)
-      discard await newChrome(options, notifier)
+      discard newChrome(options, notifier)
     )()
     return notifier
   else:
@@ -29,5 +29,5 @@ proc CDP*(
         else: "Unknown error"
       fut.fail(newException(IOError, msg))
     )
-    discard await newChrome(options, notifier)
+    discard newChrome(options, notifier)
     return await fut

@@ -1,4 +1,4 @@
-import std/[asyncdispatch, net, httpclient, strutils, nativesockets, uri, tables, strformat]
+import std/[asyncdispatch, net, httpclient, strutils, nativesockets, tables, strformat]
 
 
 type
