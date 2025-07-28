@@ -16,7 +16,7 @@ proc dnsLookup(host: string): string =
   let addrInfo = getAddrInfo(host, Port(0))
   if addrInfo == nil:
     raise newException(IOError, "DNS lookup failed for " & host)
-  let addressStr = $addrInfo.ai_addr[]
+  let addressStr = getAddrString(addrInfo.ai_addr)
   freeAddrInfo(addrInfo)
   return addressStr
 
@@ -42,7 +42,6 @@ proc externalRequest*(
   var reqHeaders = newHttpHeaders()
   for k, v in options.headers:
     reqHeaders.add(k, v)
-
   try:
     var resp: AsyncResponse
     case options.hmethod.toUpperAscii()

@@ -173,7 +173,6 @@ proc n_start(self: Chrome) {.async.} =
     "secure": self.secure,
     "useHostName": self.useHostName
   }
-  # NOTE: Do NOT try to serialize `alterPath` to JSON.
 
   try:
     let url = await self.n_fetchDebuggerURL(options)
@@ -221,7 +220,7 @@ proc newChrome*(options: JsonNode, notifier: EventEmitter): Chrome =
   )
   discard result.n_start() 
 
-proc send(self: Chrome, hmethod: string, params: JsonNode = nil, sessionId: string = "", callback: CallbackProc = nil): Future[JsonNode] {.async.} =
+proc send*(self: Chrome, hmethod: string, params: JsonNode = nil, sessionId: string = "", callback: CallbackProc = nil): Future[JsonNode] {.async.} =
   var cb = callback
   if cb == nil:
     var fut = newFuture[JsonNode]()
@@ -237,7 +236,7 @@ proc send(self: Chrome, hmethod: string, params: JsonNode = nil, sessionId: stri
     self.n_enqueueCommand(hmethod, params, sessionId, cb)
     return nil
 
-proc close(self: Chrome, callback: proc() = nil): Future[void] {.async.} =
+proc close*(self: Chrome, callback: proc() = nil): Future[void] {.async.} =
   proc closeWebSocket(cb: proc()) =
     if self.n_ws == nil or self.n_ws.readyState == Closed:
       cb()
